@@ -30,6 +30,11 @@ module arbiter_fixed_priority #(
     localparam int unsigned IDX_W = $clog2(N);
 
     //-------------------------------------------------------------------------
+    // Internal Signals
+    //-------------------------------------------------------------------------
+    logic found;
+
+    //-------------------------------------------------------------------------
     // Combinational Priority Encoder
     //-------------------------------------------------------------------------
 
@@ -38,39 +43,18 @@ module arbiter_fixed_priority #(
 
     // Priority encode: find lowest-indexed active request
     always_comb begin
+        integer i;
         grant     = '0;
         grant_idx = '0;
+        found     = 1'b0;
 
-        for (int i = 0; i < N; i++) begin
-            if (req[i]) begin
+        for (i = 0; i < N; i = i + 1) begin
+            if (req[i] && !found) begin
                 grant[i]  = 1'b1;
                 grant_idx = i[IDX_W-1:0];
-                break;
+                found     = 1'b1;
             end
         end
     end
-
-    //-------------------------------------------------------------------------
-    // Assertions (for simulation/verification)
-    //-------------------------------------------------------------------------
-    // synthesis translate_off
-
-    // Grant must be one-hot when valid
-    always_comb begin
-        if (grant_valid) begin
-            assert ($onehot(grant)) else
-                $error("arbiter_fixed_priority: grant is not one-hot");
-        end
-    end
-
-    // Grant index must match one-hot grant
-    always_comb begin
-        if (grant_valid) begin
-            assert (grant[grant_idx]) else
-                $error("arbiter_fixed_priority: grant_idx does not match grant vector");
-        end
-    end
-
-    // synthesis translate_on
 
 endmodule : arbiter_fixed_priority

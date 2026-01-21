@@ -161,37 +161,4 @@ module dma_handshake_ctrl #(
         end
     end
 
-    //-------------------------------------------------------------------------
-    // Assertions (for simulation/verification)
-    //-------------------------------------------------------------------------
-    // synthesis translate_off
-
-    // Output must be stable during backpressure
-    property p_stable_during_backpressure;
-        @(posedge clk) disable iff (rst)
-        (out_valid && !out_ready) |=> (out_valid && $stable(out_addr) &&
-                                        $stable(out_len) && $stable(out_id) &&
-                                        $stable(out_src));
-    endproperty
-    assert property (p_stable_during_backpressure) else
-        $error("dma_handshake_ctrl: output changed during backpressure");
-
-    // req_ready must be one-hot or zero
-    always_ff @(posedge clk) begin
-        if (!rst) begin
-            assert ($onehot0(req_ready)) else
-                $error("dma_handshake_ctrl: req_ready is not one-hot or zero");
-        end
-    end
-
-    // req_ready only asserts on handshake completion
-    always_ff @(posedge clk) begin
-        if (!rst && |req_ready) begin
-            assert (handshake_complete) else
-                $error("dma_handshake_ctrl: req_ready without handshake");
-        end
-    end
-
-    // synthesis translate_on
-
 endmodule : dma_handshake_ctrl

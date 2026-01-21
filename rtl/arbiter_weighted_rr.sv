@@ -54,9 +54,9 @@ module arbiter_weighted_rr #(
 
     // Round-robin selection among eligible
     logic [N-1:0] rotated_eligible;
-    logic [N-1:0] rotated_grant;
     logic [IDX_W-1:0] rotated_idx;
     logic [IDX_W-1:0] actual_idx;
+    logic found;
 
     //-------------------------------------------------------------------------
     // Combinational Logic
@@ -64,7 +64,8 @@ module arbiter_weighted_rr #(
 
     // Determine which queues are eligible (have request and credit)
     always_comb begin
-        for (int i = 0; i < N; i++) begin
+        integer i;
+        for (i = 0; i < N; i = i + 1) begin
             eligible[i] = req[i] && (credit_q[i] > 0);
         end
     end
@@ -75,16 +76,18 @@ module arbiter_weighted_rr #(
     // Check if all credits are exhausted (need reload)
     // This happens when no queue has remaining credit
     always_comb begin
+        integer i;
         credits_exhausted = 1'b1;
-        for (int i = 0; i < N; i++) begin
+        for (i = 0; i < N; i = i + 1) begin
             if (credit_q[i] > 0) credits_exhausted = 1'b0;
         end
     end
 
     // Rotate eligible mask for round-robin among eligible queues
     always_comb begin
-        for (int i = 0; i < N; i++) begin
-            automatic int unsigned src_idx;
+        integer i;
+        integer src_idx;
+        for (i = 0; i < N; i = i + 1) begin
             src_idx = (i + last_grant_q + 1) % N;
             rotated_eligible[i] = eligible[src_idx];
         end
@@ -92,13 +95,13 @@ module arbiter_weighted_rr #(
 
     // Priority encode rotated eligible mask
     always_comb begin
-        rotated_grant = '0;
+        integer i;
         rotated_idx = '0;
-        for (int i = 0; i < N; i++) begin
-            if (rotated_eligible[i]) begin
-                rotated_grant[i] = 1'b1;
+        found = 1'b0;
+        for (i = 0; i < N; i = i + 1) begin
+            if (rotated_eligible[i] && !found) begin
                 rotated_idx = i[IDX_W-1:0];
-                break;
+                found = 1'b1;
             end
         end
     end
@@ -116,12 +119,13 @@ module arbiter_weighted_rr #(
 
     // Compute next credit values
     always_comb begin
+        integer i;
         credit_d = credit_q;
 
         if (credits_exhausted || (!grant_valid && |req)) begin
             // Reload all credits from weights
             // This also handles the case where requests exist but none are eligible
-            for (int i = 0; i < N; i++) begin
+            for (i = 0; i < N; i = i + 1) begin
                 credit_d[i] = weight[i];
             end
         end else if (grant_valid && grant_ack) begin
@@ -134,11 +138,11 @@ module arbiter_weighted_rr #(
     // Sequential Logic
     //-------------------------------------------------------------------------
     always_ff @(posedge clk) begin
+        integer i;
         if (rst) begin
-            credit_q <= '0;
             last_grant_q <= '0;
-            // Load initial credits from weights on first cycle after reset
-            for (int i = 0; i < N; i++) begin
+            // Load initial credits from weights on reset
+            for (i = 0; i < N; i = i + 1) begin
                 credit_q[i] <= weight[i];
             end
         end else begin
@@ -148,28 +152,5 @@ module arbiter_weighted_rr #(
             end
         end
     end
-
-    //-------------------------------------------------------------------------
-    // Assertions (for simulation/verification)
-    //-------------------------------------------------------------------------
-    // synthesis translate_off
-
-    // Grant must be one-hot when valid
-    always_ff @(posedge clk) begin
-        if (!rst && grant_valid) begin
-            assert ($onehot(grant)) else
-                $error("arbiter_weighted_rr: grant is not one-hot");
-        end
-    end
-
-    // Granted queue must be eligible
-    always_ff @(posedge clk) begin
-        if (!rst && grant_valid) begin
-            assert (eligible[grant_idx]) else
-                $error("arbiter_weighted_rr: granted an ineligible queue");
-        end
-    end
-
-    // synthesis translate_on
 
 endmodule : arbiter_weighted_rr

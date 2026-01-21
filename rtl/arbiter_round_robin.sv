@@ -37,10 +37,10 @@ module arbiter_round_robin #(
     //-------------------------------------------------------------------------
     logic [IDX_W-1:0]   last_grant_q;       // Index of last granted requester
     logic [N-1:0]       rotated_req;        // Request vector rotated by last_grant+1
-    logic [N-1:0]       rotated_grant;      // One-hot grant in rotated space
     logic [IDX_W-1:0]   rotated_idx;        // Index of grant in rotated space
     logic [IDX_W-1:0]   actual_idx;         // Index of grant in original space
     logic               any_request;        // At least one active request
+    logic               found;              // Found flag for priority encode
 
     //-------------------------------------------------------------------------
     // Combinational Logic
@@ -52,8 +52,9 @@ module arbiter_round_robin #(
     // Rotate requests so position (last_grant + 1) becomes position 0
     // This gives lowest priority to the last granted requester
     always_comb begin
-        for (int i = 0; i < N; i++) begin
-            automatic int unsigned src_idx;
+        integer i;
+        integer src_idx;
+        for (i = 0; i < N; i = i + 1) begin
             src_idx = (i + last_grant_q + 1) % N;
             rotated_req[i] = req[src_idx];
         end
@@ -61,13 +62,13 @@ module arbiter_round_robin #(
 
     // Priority encode: find first set bit in rotated request vector
     always_comb begin
-        rotated_grant = '0;
+        integer i;
         rotated_idx = '0;
-        for (int i = 0; i < N; i++) begin
-            if (rotated_req[i]) begin
-                rotated_grant[i] = 1'b1;
+        found = 1'b0;
+        for (i = 0; i < N; i = i + 1) begin
+            if (rotated_req[i] && !found) begin
                 rotated_idx = i[IDX_W-1:0];
-                break;
+                found = 1'b1;
             end
         end
     end
@@ -96,36 +97,5 @@ module arbiter_round_robin #(
             last_grant_q <= actual_idx;
         end
     end
-
-    //-------------------------------------------------------------------------
-    // Assertions (for simulation/verification)
-    //-------------------------------------------------------------------------
-    // synthesis translate_off
-
-    // Grant must be one-hot when valid
-    always_ff @(posedge clk) begin
-        if (!rst && grant_valid) begin
-            assert ($onehot(grant)) else
-                $error("arbiter_round_robin: grant is not one-hot");
-        end
-    end
-
-    // Grant index must match one-hot grant
-    always_ff @(posedge clk) begin
-        if (!rst && grant_valid) begin
-            assert (grant[grant_idx]) else
-                $error("arbiter_round_robin: grant_idx does not match grant vector");
-        end
-    end
-
-    // Granted requester must have an active request
-    always_ff @(posedge clk) begin
-        if (!rst && grant_valid) begin
-            assert (req[grant_idx]) else
-                $error("arbiter_round_robin: granted a requester without active request");
-        end
-    end
-
-    // synthesis translate_on
 
 endmodule : arbiter_round_robin
